@@ -1,0 +1,24 @@
+name: 'projeto_dbt_cnpj'
+version: '0.2.0'
+config-version: 2
+profile: 'projeto_dbt_cnpj'
+
+model-paths: ["models"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+seed-paths: ["seeds"]
+analysis-paths: ["analyses"]
+snapshot-paths: ["snapshots"]
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  projeto_dbt_cnpj:
+    staging:
+      +materialized: view
+    intermediate:
+      +materialized: view
+    marts:
+      +materialized: table

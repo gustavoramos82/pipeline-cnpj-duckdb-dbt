@@ -1,0 +1,7 @@
+projeto_dbt_cnpj:
+  target: local
+  outputs:
+    local:
+      type: duckdb
+      path: "{{ env_var('CNPJ_DB_PATH', '../data/cnpj.duckdb') }}"
+      threads: 4

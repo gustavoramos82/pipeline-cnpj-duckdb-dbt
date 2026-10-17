@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.py[cod]
+.env
+logs/*
+!logs/.gitkeep
+data/*
+!data/.gitkeep
+projeto_dbt_cnpj/target/
+projeto_dbt_cnpj/dbt_packages/
+projeto_dbt_cnpj/logs/

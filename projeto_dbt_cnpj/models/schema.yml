@@ -1,0 +1,34 @@
+version: 2
+
+models:
+  - name: stg_empresas
+    description: "Dados padronizados do arquivo público EMPRESAS."
+    columns:
+      - name: cnpj_basico
+        description: "Raiz do CNPJ, mantida como texto para preservar zeros à esquerda."
+        data_tests:
+          - not_null
+
+  - name: stg_estabelecimentos
+    description: "Dados padronizados do arquivo público ESTABELECIMENTOS."
+    columns:
+      - name: cnpj_completo
+        description: "CNPJ completo de 14 dígitos como texto."
+        data_tests:
+          - not_null
+
+  - name: stg_socios
+    description: "Dados padronizados dos vínculos societários."
+    columns:
+      - name: cnpj_basico
+        data_tests:
+          - not_null
+
+  - name: socios_ouro
+    description: >
+      Visão analítica no grão estabelecimento x vínculo societário. O CNPJ completo
+      pode se repetir quando o estabelecimento possui mais de um sócio.
+    columns:
+      - name: cnpj_completo
+        data_tests:
+          - not_null
