@@ -1,45 +1,82 @@
-# Pipeline CNPJ — DuckDB + dbt
+# Pipeline CNPJ (DuckDB + dbt)
 
-Pipeline local e portátil para tratar os arquivos públicos de CNPJ da Receita Federal. DuckDB executa a conversão e o processamento local; dbt organiza os modelos e testes.
+Pipeline de Engenharia de Dados de alta performance, eficiente em termos de memória e orientado a dados abertos da Receita Federal (CNPJ: Empresas, Estabelecimentos e Sócios). Este projeto foi concebido para alimentar rotinas de conciliação financeira com rigor de integridade, idempotência e baixo consumo de recursos.
 
-## Arquitetura
+O objetivo não é trazer a base completo mas um pipeline simplificado para trazer apenas as informações necessárias
+
+---
+
+## 🚀 Principais Melhorias e Arquitetura
+
+1. **Camada Prata Completa (Preservação de Histórico)**:
+   - Os dados brutos são convertidos e limpos para Parquet sem exclusões rígidas na origem, garantindo flexibilidade para consultas históricas completas caso necessário.
+
+2. **Arquitetura de Grafo dbt Otimizada**:
+   - Remoção de dependências e modelos obsoletos (como qualificações e tabelas acessórias que não agregavam valor à camada analítica final).
+   - Limpeza e otimização do fluxo de *staging*, intermediários (*intermediate*) e *marts*, garantindo um ciclo de compilação livre de erros e dependências órfãs.
+
+3. **Filtragem e Enriquecimento na Camada Ouro**:
+   - Aplicação de filtros específicos (como o isolamento de empresas e estabelecimentos ativos) diretamente na modelagem final, mantendo a camada Prata intacta para eventuais consultas de auditoria.
+   - Correção e mapeamento robusto do relacionamento entre **Estabelecimentos, Empresas (Razão Social) e Sócios**.
+   - Garantia de que a tabela final (`socios_ouro`) possui o grão correto de **estabelecimento x vínculo societário**, trazendo o `cnpj_completo` e o `nome_empresa` devidamente preenchidos para cruzamento financeiro.
+
+4. **Desempenho com o Motor DuckDB**:
+   - Aproveitamento nativo do motor *out-of-core* e vetorial do DuckDB, garantindo execução fluida mesmo sob limites restritos de memória.
+
+---
+
+## 🛠️ Tecnologias Utilizadas
+
+* **Python**: Orquestração e automação do pipeline (`main.py`).
+* **DuckDB**: Motor analítico relacional de alta performance para processamento em streaming e manipulação de Parquet.
+* **dbt (dbt-duckdb)**: Transformação de dados, testes de qualidade e documentação modular.
+* **Formato Parquet (ZSTD)**: Armazenamento columnar comprimido nas camadas Prata e Ouro.
+
+---
+
+## 📂 Estrutura do Projeto
 
 ```text
-Arquivos ZIP originais da Receita
-          ↓
-Bronze: data/bronze/ (originais preservados)
-          ↓ extração segura
-Bronze operacional: data/bronze/csv/
-          ↓ transcodificação temporária para UTF-8
-DuckDB COPY + Parquet ZSTD
-          ↓
-Prata: data/silver/parquet/*.parquet
-          ↓ modelos dbt + DuckDB
-Ouro: data/gold/socios_ouro.parquet + banco data/cnpj.duckdb
+pipeline-cnpj-duckdb-dbt/
+├── data/
+│   ├── bronze/          # Dados brutos descompactados (CSV)
+│   ├── silver/          # Dados limpos e particionados (Parquet)
+│   └── gold/            # Visões consolidadas e filtradas finais para o negócio
+├── projeto_dbt_cnpj/
+│   ├── models/
+│   │   ├── staging/     # stg_empresas, stg_estabelecimentos, stg_socios
+│   │   ├── intermediate/# int_socios_empresa
+│   │   └── marts/       # socios_ouro (Tabela final com filtros aplicados)
+│   └── dbt_project.yml
+├── src/
+│   └── duckdb_etl.py    # Scripts de extração e conversão
+├── main.py              # Orquestrador geral do pipeline
+└── README.md
 ```
 
-A Prata usa Parquet como formato persistente. O CSV UTF-8 criado para lidar com arquivos de origem em Latin-1 é temporário e apagado após a conversão bem-sucedida. Os ZIPs e arquivos de origem da Bronze são preservados.
+---
 
-## Execução
+## ⚙️ Como Executar o Pipeline
 
-1. Coloque os ZIPs oficiais em `data/bronze/`.
-2. Execute `uv sync`.
-3. Execute `uv run python main.py`.
+### 1. Pré-requisitos
+Certifique-se de ter o Python instalado juntamente com as bibliotecas necessárias:
+```bash
+pip install duckdb dbt-duckdb
+```
 
-A saída final é `data/gold/socios_ouro.parquet`; o banco DuckDB fica em `data/cnpj.duckdb`.
+### 2. Configuração do Ambiente
+Coloque os ficheiros CSV brutos da Receita Federal na pasta de dados bronze correspondente ou certifique-se de que o script de extração está a apontar para os diretórios corretos.
 
-## Componentes
+### 3. Execução Completa
+Execute o script principal de orquestração no terminal para correr o ETL da Prata e compilar os modelos dbt:
+```bash
+python main.py
+```
 
-- `src/extracao.py`: extrai arquivos tabulares dos ZIPs, inclusive nomes oficiais sem extensão `.csv`.
-- `src/duckdb_etl.py`: detecta encoding por amostra, converte em streaming para UTF-8 temporário e usa DuckDB para gerar Parquet com compressão ZSTD. Registra manifesto com tamanho e SHA-256 dos originais.
-- `projeto_dbt_cnpj/models/staging/`: staging lê os arquivos Parquet da Prata.
-- `models/intermediate/`: relacionamentos.
-- `models/marts/`: tabela analítica de saída.
-
-## Importante antes de produção
-
-- A implementação de conversão para Parquet está incluída, mas não foi validada de ponta a ponta com todos os arquivos oficiais atuais da Receita. Faça primeiro um teste com uma amostra real.
-- Os arquivos CNPJ oficiais frequentemente não terminam em `.csv`; o extrator reconhece sufixos comuns como `EMPRECSV`, `ESTABELE`, `SOCIOCSV`, `QUALS`, `SIMPLES`, `CNAE`, `MUN` e `NATJU`. A Receita pode alterar nomes ou pacotes; confira os arquivos efetivamente baixados.
-- Confirme os índices das colunas com o leiaute oficial vigente. Não preencha componentes ausentes do CNPJ com valores inventados.
-- A junção de sócios com estabelecimentos pelo CNPJ básico pode multiplicar linhas quando há vários estabelecimentos e vários sócios. Defina a granularidade da análise antes de usar os resultados.
-- Trate esta versão como base de implementação a ser testada, não como pipeline já homologada com a base integral.
+### 4. Validação na Camada Ouro
+Pode consultar diretamente o resultado consolidado e testar os dados (como a consulta de uma empresa específica) utilizando o DuckDB:
+```sql
+SELECT *
+FROM read_parquet('data/gold/socios_ouro.parquet')
+WHERE cnpj_completo = 'qualquercnpj';
+```
